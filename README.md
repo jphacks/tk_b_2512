@@ -1,6 +1,6 @@
 # ozendate
 
-[![IMAGE ALT TEXT HERE](サムネイル画像のURL)](https://drive.google.com/file/d/12lvIkgJLO_FViAfK5Ih9vw-exEeCjeY0/view)
+[![IMAGE ALT TEXT HERE](https://raw.githubusercontent.com/jphacks/tk_b_2512/refs/heads/doc/19/updatereadme/image/ozendate.png)](https://drive.google.com/file/d/12lvIkgJLO_FViAfK5Ih9vw-exEeCjeY0/view)
 
 ## 製品概要
 ### 背景
