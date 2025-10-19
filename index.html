@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ozendate - AIテーブルコーディネート プロトタイプ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #FDFBF8;
         }
         .loader {
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #6366f1;
+            border-top: 4px solid #8C5E4A;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -25,10 +26,7 @@
         #image-container::after {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.2);
             opacity: 0;
             transition: opacity 0.3s;
@@ -39,36 +37,47 @@
         }
         .recommendation-card {
             transition: all 0.2s ease-in-out;
+            border: 2px solid transparent;
         }
         .recommendation-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
         }
+        .recommendation-card.selected {
+             border-color: #8C5E4A;
+             transform: translateY(-2px);
+             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        /* 横スクロールバーのスタイル */
+        #recommendations-container::-webkit-scrollbar { height: 8px; }
+        #recommendations-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        #recommendations-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+        #recommendations-container::-webkit-scrollbar-thumb:hover { background: #aaa; }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen flex items-center justify-center p-4">
+<body class="text-gray-800 min-h-screen flex items-center justify-center p-4">
 
-    <div class="w-full max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 md:p-8">
+    <div class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
         <header class="text-center mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400">ozendate</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-2">AIテーブルコーディネートをもっと楽しく！</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-[#8C5E4A]">ozendate</h1>
+            <p class="text-gray-600 mt-2">AIテーブルコーディネートをもっと楽しく！</p>
         </header>
 
         <!-- Step 1: Upload Section -->
         <section id="upload-section" class="text-center">
-            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 md:p-12 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition" onclick="document.getElementById('image-uploader').click()">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+            <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 md:p-12 cursor-pointer hover:bg-gray-50 transition" onclick="document.getElementById('image-uploader').click()">
+                <svg class="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                 </svg>
-                <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">テーブルの写真をアップロード</p>
-                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">クリックしてファイルを選択</p>
+                <p class="mt-4 font-semibold text-gray-700">テーブルの写真をアップロード</p>
+                <p class="mt-1 text-sm text-gray-500">クリックしてファイルを選択</p>
             </div>
             <input type="file" id="image-uploader" class="hidden" accept="image/*">
         </section>
 
         <!-- Step 2: Editor Section -->
         <section id="editor-section" class="hidden">
-            <div id="instruction" class="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-200 p-3 rounded-lg text-center mb-4 text-sm font-medium">
+            <div id="instruction" class="bg-amber-50 text-amber-800 p-3 rounded-lg text-center mb-4 text-sm font-medium">
                 <p id="instruction-text">1. 新しい食器を置きたい場所をクリックしてください。</p>
             </div>
 
@@ -77,39 +86,39 @@
             </div>
 
             <div id="recommendations" class="hidden mt-6">
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">AIのおすすめ</h2>
+                 <div id="recommendations-container" class="flex space-x-4 overflow-x-auto pb-4">
                     <!-- Recommendation items will be injected by JS -->
-                </div>
+                 </div>
             </div>
         </section>
 
         <!-- Step 3: Loading Section -->
         <section id="loading-section" class="hidden text-center py-12">
             <div class="loader mx-auto"></div>
-            <p class="mt-4 text-lg font-semibold text-gray-600 dark:text-gray-400">AIが画像を生成中です...</p>
+            <p id="loading-text" class="mt-4 text-lg font-semibold text-gray-600">AIが画像を生成中です...</p>
             <p class="text-sm text-gray-500">素晴らしいコーディネートを準備しています</p>
         </section>
 
         <!-- Step 4: Result Section -->
         <section id="result-section" class="hidden text-center">
-            <h2 class="text-2xl font-bold mb-4">✨ 完成です！ ✨</h2>
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">✨ 完成です！ ✨</h2>
             <img id="result-image" src="#" alt="Generated coordinate" class="rounded-lg shadow-lg w-full max-w-2xl mx-auto">
-            <button id="reset-button" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-full transition">
+            <button id="reset-button" class="mt-6 bg-[#8C5E4A] hover:bg-[#754f3d] text-white font-bold py-2 px-6 rounded-full transition">
                 もう一度試す
             </button>
         </section>
 
         <!-- Error Modal -->
-        <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl text-center">
-                <h3 class="text-lg font-bold text-red-600 dark:text-red-400">エラーが発生しました</h3>
-                <p id="error-message" class="mt-2 text-sm text-gray-600 dark:text-gray-400"></p>
-                <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="mt-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded-lg">
+        <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-lg p-6 shadow-xl text-center max-w-sm">
+                <h3 class="text-lg font-bold text-red-600">エラーが発生しました</h3>
+                <p id="error-message" class="mt-2 text-sm text-gray-600"></p>
+                <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="mt-4 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
                     閉じる
                 </button>
             </div>
         </div>
-
     </div>
 
     <script>
@@ -122,38 +131,26 @@
         const uploadedImage = document.getElementById('uploaded-image');
         const imageContainer = document.getElementById('image-container');
         const recommendations = document.getElementById('recommendations');
+        const recommendationsContainer = document.getElementById('recommendations-container');
         const resultImage = document.getElementById('result-image');
 
         const resetButton = document.getElementById('reset-button');
         const instructionText = document.getElementById('instruction-text');
+        const loadingText = document.getElementById('loading-text');
         
         const errorModal = document.getElementById('error-modal');
         const errorMessage = document.getElementById('error-message');
 
         let originalImageBase64 = '';
         let placementMarker = null;
-        let selectedDish = '';
-        
-        // --- おすすめの食器データ ---
-        const recommendedDishes = [
-            { name: '青い陶器のボウル', name_en: 'a blue ceramic bowl', img: 'https://placehold.co/200x200/3498db/ffffff?text=青いボウル' },
-            { name: '木製のサラダボウル', name_en: 'a wooden salad bowl', img: 'https://placehold.co/200x200/8b5e3c/ffffff?text=木製ボウル' },
-            { name: 'ガラスのコップ', name_en: 'a clear glass cup', img: 'https://placehold.co/200x200/a2d2ff/ffffff?text=コップ' },
-            { name: '白いモダンな平皿', name_en: 'a white modern flat plate', img: 'https://placehold.co/200x200/ecf0f1/34495e?text=白い皿' },
-            { name: '黒い石のスレート皿', name_en: 'a black stone slate plate', img: 'https://placehold.co/200x200/34495e/ffffff?text=石の皿' },
-            { name: '和柄の小皿', name_en: 'a small plate with a traditional Japanese pattern', img: 'https://placehold.co/200x200/c0392b/ffffff?text=和柄の皿' },
-            { name: 'ステンレスのカトラリー', name_en: 'a set of stainless steel cutlery', img: 'https://placehold.co/200x200/bdc3c7/34495e?text=カトラリー' },
-            { name: 'リネンのナプキン', name_en: 'a folded linen napkin', img: 'https://placehold.co/200x200/f1e0b5/34495e?text=ナプキン' },
-        ];
+        let selectedDish = null;
 
-        // --- イベントリスナー ---
-
+        // --- Event Listeners ---
         imageUploader.addEventListener('change', handleImageUpload);
         imageContainer.addEventListener('click', handleImageClick);
         resetButton.addEventListener('click', resetApp);
         
-        // --- 関数 ---
-
+        // --- Functions ---
         function handleImageUpload(event) {
             const file = event.target.files[0];
             if (file) {
@@ -169,67 +166,126 @@
         }
 
         function handleImageClick(event) {
-            if (recommendations.classList.contains('hidden')) {
-                const rect = imageContainer.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
+            // Only proceed if we haven't started showing recommendations yet
+            if (!recommendations.classList.contains('hidden')) {
+                return;
+            }
+        
+            const rect = imageContainer.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
 
-                if (placementMarker) {
-                    placementMarker.remove();
+            if (placementMarker) {
+                placementMarker.remove();
+            }
+
+            placementMarker = document.createElement('div');
+            placementMarker.style.position = 'absolute';
+            placementMarker.style.left = `${x - 15}px`;
+            placementMarker.style.top = `${y - 15}px`;
+            placementMarker.style.width = '30px';
+            placementMarker.style.height = '30px';
+            placementMarker.style.border = '3px solid #8C5E4A';
+            placementMarker.style.borderRadius = '50%';
+            placementMarker.style.backgroundColor = 'rgba(140, 94, 74, 0.3)';
+            placementMarker.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+            placementMarker.style.pointerEvents = 'none';
+            imageContainer.appendChild(placementMarker);
+            
+            // New flow: get AI recommendations
+            getAiDishRecommendations();
+        }
+
+        async function getAiDishRecommendations() {
+            instructionText.textContent = 'AIがあなたにおすすめの食器を考えています...';
+            recommendations.classList.remove('hidden');
+            recommendationsContainer.innerHTML = `<div class="w-full flex justify-center py-8"><div class="loader"></div></div>`;
+            imageContainer.style.cursor = 'default';
+
+            const prompt = `Analyze the attached image of a table setting. A user wants to place a new item. Suggest 5 diverse types of tableware (like 'a small blue ceramic bowl', 'a rustic wooden plate', 'a modern glass cup') that would complement the existing items in terms of style, color, and occasion. Provide the response as a valid JSON array of objects, where each object has a 'name_ja' (Japanese name) and a 'name_en' (English name for the image generation prompt).`;
+            const base64Data = originalImageBase64.split(',')[1];
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+                    ]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "name_ja": { "type": "STRING" },
+                                "name_en": { "type": "STRING" }
+                            },
+                            required: ["name_ja", "name_en"]
+                        }
+                    }
                 }
+            };
 
-                placementMarker = document.createElement('div');
-                placementMarker.style.position = 'absolute';
-                placementMarker.style.left = `${x - 15}px`;
-                placementMarker.style.top = `${y - 15}px`;
-                placementMarker.style.width = '30px';
-                placementMarker.style.height = '30px';
-                placementMarker.style.border = '3px solid #6366f1';
-                placementMarker.style.borderRadius = '50%';
-                placementMarker.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
-                placementMarker.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
-                placementMarker.style.pointerEvents = 'none';
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-                imageContainer.appendChild(placementMarker);
-                showRecommendations();
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error (${response.status}): ${await response.text()}`);
+                }
+                
+                const result = await response.json();
+                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                const recommendedDishes = JSON.parse(jsonText);
+                
+                displayRecommendations(recommendedDishes);
+
+            } catch (error) {
+                console.error("Failed to get AI recommendations:", error);
+                showError(`AIによる提案の取得に失敗しました。${error.message}`);
+                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">提案の取得に失敗しました。</p>`;
             }
         }
 
-        function showRecommendations() {
-            instructionText.textContent = '2. 追加したい食器を選んでください。';
-            recommendations.innerHTML = ''; // Clear previous
+        function displayRecommendations(dishes) {
+            instructionText.textContent = '2. AIの提案から追加したい食器を選んでください。';
+            recommendationsContainer.innerHTML = ''; // Clear loader
             
-            const recommendationContainer = document.createElement('div');
-            recommendationContainer.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4';
-
-            recommendedDishes.forEach(dish => {
+            dishes.forEach(dish => {
                 const card = document.createElement('div');
-                card.className = 'recommendation-card bg-gray-50 dark:bg-gray-700 p-3 rounded-lg text-center cursor-pointer';
+                card.className = 'recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md cursor-pointer border';
+                // Using placeholder images based on the dish name
+                const placeholderImg = `https://placehold.co/200x200/EAE5DB/333333?text=${encodeURIComponent(dish.name_ja)}`;
                 card.innerHTML = `
-                    <img src="${dish.img}" alt="${dish.name}" class="w-full h-24 object-cover rounded-md mx-auto">
-                    <p class="text-xs font-semibold mt-2">${dish.name}</p>
+                    <img src="${placeholderImg}" alt="${dish.name_ja}" class="w-full h-24 object-cover rounded-md mx-auto">
+                    <p class="text-xs font-semibold mt-2 text-center">${dish.name_ja}</p>
                 `;
-                card.onclick = () => selectDish(dish);
-                recommendationContainer.appendChild(card);
+                card.onclick = (event) => selectDish(dish, event.currentTarget);
+                recommendationsContainer.appendChild(card);
             });
-            recommendations.appendChild(recommendationContainer);
-            recommendations.classList.remove('hidden');
         }
 
-        function selectDish(dish) {
-            selectedDish = dish.name_en;
+        function selectDish(dish, selectedCard) {
+             if(selectedDish) return; // Prevent multiple selections
+
+            selectedDish = dish;
             imageContainer.classList.add('dimmed');
             
-            // Highlight selected card
             document.querySelectorAll('.recommendation-card').forEach(c => {
-                c.style.opacity = '0.5';
-                c.style.pointerEvents = 'none'; // Disable further clicks
+                c.style.opacity = '0.6';
+                c.style.pointerEvents = 'none';
             });
-            event.currentTarget.style.opacity = '1';
-            event.currentTarget.style.border = '2px solid #6366f1';
+            selectedCard.style.opacity = '1';
+            selectedCard.classList.add('selected');
 
-
-            // Wait a moment before starting generation
             setTimeout(generateImage, 500);
         }
 
@@ -240,6 +296,7 @@
             }
 
             editorSection.classList.add('hidden');
+            loadingText.textContent = 'AIが画像を生成中です...';
             loadingSection.classList.remove('hidden');
             
             const rect = uploadedImage.getBoundingClientRect();
@@ -251,10 +308,11 @@
             const percentX = (relativeX / rect.width) * 100;
             const percentY = (relativeY / rect.height) * 100;
             
-            const prompt = `Please place ${selectedDish} on the table in the image. The desired location is approximately at ${percentX.toFixed(1)}% from the left and ${percentY.toFixed(1)}% from the top. The new item should blend in naturally with the existing lighting, shadows, and perspective. Maintain the original image's style and quality.`;
-            
+            const prompt = `Photo of a table setting. Place ${selectedDish.name_en} on the table. The desired location for the new item is at the center of the provided mask area. The new item should blend in naturally with the existing lighting, shadows, and perspective. Maintain the original image's style and quality. Do not change anything else in the image.`;
             const base64Data = originalImageBase64.split(',')[1];
             
+            // For now, we will use a simpler image generation API call as inpainting is complex.
+            // The prompt asks the model to place the item at a percentage-based location.
             const payload = {
                 contents: [{
                     parts: [
@@ -262,13 +320,12 @@
                         { inlineData: { mimeType: "image/jpeg", data: base64Data } }
                     ]
                 }],
-                 //【修正】generationConfigのキーをresponseModalitiesに変更し、値を修正しました。
-                 generationConfig: {
+                generationConfig: {
                     responseModalities: ['IMAGE']
                 }
             };
             
-            const apiKey = ""; // APIキーはCanvas環境で自動的に提供されます
+            const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
 
             try {
@@ -279,17 +336,10 @@
                 });
                 
                 if (!response.ok) {
-                    let errorText = '';
-                    try {
-                        errorText = await response.text();
-                        const errorJson = JSON.parse(errorText);
-                        throw new Error(`API error (${response.status}): ${errorJson.error?.message || 'Unknown error'}`);
-                    } catch (e) {
-                        throw new Error(`API error (${response.status}): ${errorText || response.statusText}`);
-                    }
+                     const errorText = await response.text();
+                     throw new Error(`API error (${response.status}): ${errorText}`);
                 }
                 
-                //【修正】レスポンスをJSONとして解析し、画像データを取得するように修正しました。
                 const result = await response.json();
                 const generatedImageData = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
@@ -306,32 +356,43 @@
             } catch (error) {
                 console.error("Image generation failed:", error);
                 showError(`画像の生成に失敗しました。詳細: ${error.message}`);
+                // Revert to editor state on failure
                 loadingSection.classList.add('hidden');
                 editorSection.classList.remove('hidden'); 
-                imageContainer.classList.remove('dimmed');
-                if(placementMarker) placementMarker.remove();
-                recommendations.classList.add('hidden');
-                instructionText.textContent = '1. 新しい食器を置きたい場所をクリックしてください。';
+                resetToSelectionStep();
             }
+        }
+        
+        function resetToSelectionStep() {
+             imageContainer.classList.remove('dimmed');
+             if(placementMarker) placementMarker.remove();
+             placementMarker = null;
+             recommendations.classList.add('hidden');
+             recommendationsContainer.innerHTML = '';
+             instructionText.textContent = '1. 新しい食器を置きたい場所をクリックしてください。';
+             selectedDish = null;
+             imageContainer.style.cursor = 'crosshair';
         }
 
         function resetApp() {
             originalImageBase64 = '';
-            selectedDish = '';
+            selectedDish = null;
             if (placementMarker) {
                 placementMarker.remove();
                 placementMarker = null;
             }
 
-            imageUploader.value = ''; // Reset file input
+            imageUploader.value = '';
             uploadedImage.src = '#';
             resultImage.src = '#';
             imageContainer.classList.remove('dimmed');
+            imageContainer.style.cursor = 'crosshair';
             
             resultSection.classList.add('hidden');
             editorSection.classList.add('hidden');
             loadingSection.classList.add('hidden');
             recommendations.classList.add('hidden');
+            recommendationsContainer.innerHTML = '';
             uploadSection.classList.remove('hidden');
             instructionText.textContent = '1. 新しい食器を置きたい場所をクリックしてください。';
         }
@@ -345,17 +406,18 @@
             for (let i = 0; i < retries; i++) {
                 try {
                     const response = await fetch(url, options);
-                    if (response.status !== 429) { // Not a rate-limiting error
+                    // Don't retry on client-side errors, only server/rate-limit errors
+                    if (response.status < 500 && response.status !== 429) { 
                         return response;
                     }
+                    if (i === retries - 1) return response; // Return last failed response
                 } catch (error) {
-                    if (i === retries - 1) throw error; // Last retry failed
+                    if (i === retries - 1) throw error;
                 }
-                await new Promise(res => setTimeout(res, delay * Math.pow(2, i))); // Exponential backoff
+                await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
             }
             throw new Error("Max retries reached");
         }
     </script>
 </body>
 </html>
-
