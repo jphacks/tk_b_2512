@@ -86,7 +86,7 @@
             </div>
 
             <div id="recommendations" class="hidden mt-6">
-                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">AIのおすすめ</h2>
+                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">おすすめの食器</h2>
                  <div id="recommendations-container" class="flex space-x-4 overflow-x-auto pb-4">
                     <!-- Recommendation items will be injected by JS -->
                  </div>
@@ -166,7 +166,6 @@
         }
 
         function handleImageClick(event) {
-            // Only proceed if we haven't started showing recommendations yet
             if (!recommendations.classList.contains('hidden')) {
                 return;
             }
@@ -192,81 +191,45 @@
             placementMarker.style.pointerEvents = 'none';
             imageContainer.appendChild(placementMarker);
             
-            // New flow: get AI recommendations
-            getAiDishRecommendations();
+            fetchDishRecommendations();
         }
 
-        async function getAiDishRecommendations() {
-            instructionText.textContent = 'AIがあなたにおすすめの食器を考えています...';
+        async function fetchDishRecommendations() {
+            instructionText.textContent = 'おすすめの食器を探しています...';
             recommendations.classList.remove('hidden');
             recommendationsContainer.innerHTML = `<div class="w-full flex justify-center py-8"><div class="loader"></div></div>`;
             imageContainer.style.cursor = 'default';
 
-            const prompt = `Analyze the attached image of a table setting. A user wants to place a new item. Suggest 5 diverse types of tableware (like 'a small blue ceramic bowl', 'a rustic wooden plate', 'a modern glass cup') that would complement the existing items in terms of style, color, and occasion. Provide the response as a valid JSON array of objects, where each object has a 'name_ja' (Japanese name) and a 'name_en' (English name for the image generation prompt).`;
-            const base64Data = originalImageBase64.split(',')[1];
-            
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-                    ]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "name_ja": { "type": "STRING" },
-                                "name_en": { "type": "STRING" }
-                            },
-                            required: ["name_ja", "name_en"]
-                        }
-                    }
-                }
-            };
-
-            const apiKey = ""; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            // Corrected URL from the prompt, assuming the user provided the correct one.
+            const jsonUrl = 'https://raw.githubusercontent.com/jphacks/tk_b_2512/main/json/consumer.json';
 
             try {
-                const response = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
+                const response = await fetch(jsonUrl);
                 if (!response.ok) {
-                    throw new Error(`API error (${response.status}): ${await response.text()}`);
+                    throw new Error(`Network response was not ok: ${response.statusText}`);
                 }
-                
-                const result = await response.json();
-                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                const recommendedDishes = JSON.parse(jsonText);
-                
-                displayRecommendations(recommendedDishes);
+                // The new JSON has a different structure, let's adapt.
+                const dishes = await response.json();
+                displayRecommendations(dishes);
 
             } catch (error) {
-                console.error("Failed to get AI recommendations:", error);
-                showError(`AIによる提案の取得に失敗しました。${error.message}`);
-                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">提案の取得に失敗しました。</p>`;
+                console.error("Failed to fetch dish recommendations:", error);
+                showError(`食器リストの取得に失敗しました。${error.message}`);
+                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">リストの取得に失敗しました。</p>`;
             }
         }
 
         function displayRecommendations(dishes) {
-            instructionText.textContent = '2. AIの提案から追加したい食器を選んでください。';
-            recommendationsContainer.innerHTML = ''; // Clear loader
+            instructionText.textContent = '2. 提案から追加したい食器を選んでください。';
+            recommendationsContainer.innerHTML = '';
             
             dishes.forEach(dish => {
                 const card = document.createElement('div');
                 card.className = 'recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md cursor-pointer border';
-                // Using placeholder images based on the dish name
-                const placeholderImg = `https://placehold.co/200x200/EAE5DB/333333?text=${encodeURIComponent(dish.name_ja)}`;
+                // Using new keys 'image' for URL and 'text' for description
                 card.innerHTML = `
-                    <img src="${placeholderImg}" alt="${dish.name_ja}" class="w-full h-24 object-cover rounded-md mx-auto">
-                    <p class="text-xs font-semibold mt-2 text-center">${dish.name_ja}</p>
+                    <img src="${dish.image}" alt="${dish.text}" class="w-full h-24 object-cover rounded-md mx-auto" crossorigin="anonymous">
+                    <p class="text-xs font-semibold mt-2 text-center">${dish.text}</p>
                 `;
                 card.onclick = (event) => selectDish(dish, event.currentTarget);
                 recommendationsContainer.appendChild(card);
@@ -274,7 +237,7 @@
         }
 
         function selectDish(dish, selectedCard) {
-             if(selectedDish) return; // Prevent multiple selections
+             if(selectedDish) return;
 
             selectedDish = dish;
             imageContainer.classList.add('dimmed');
@@ -289,6 +252,7 @@
             setTimeout(generateImage, 500);
         }
 
+        // --- Image Composition and API Call ---
         async function generateImage() {
             if (!originalImageBase64 || !selectedDish || !placementMarker) {
                 showError("画像、配置場所、食器が選択されていません。");
@@ -296,39 +260,34 @@
             }
 
             editorSection.classList.add('hidden');
-            loadingText.textContent = 'AIが画像を生成中です...';
+            loadingText.textContent = '画像を合成しています...';
             loadingSection.classList.remove('hidden');
-            
-            const rect = uploadedImage.getBoundingClientRect();
-            const markerRect = placementMarker.getBoundingClientRect();
-            
-            const relativeX = markerRect.left + markerRect.width / 2 - rect.left;
-            const relativeY = markerRect.top + markerRect.height / 2 - rect.top;
-
-            const percentX = (relativeX / rect.width) * 100;
-            const percentY = (relativeY / rect.height) * 100;
-            
-            const prompt = `Photo of a table setting. Place ${selectedDish.name_en} on the table. The desired location for the new item is at the center of the provided mask area. The new item should blend in naturally with the existing lighting, shadows, and perspective. Maintain the original image's style and quality. Do not change anything else in the image.`;
-            const base64Data = originalImageBase64.split(',')[1];
-            
-            // For now, we will use a simpler image generation API call as inpainting is complex.
-            // The prompt asks the model to place the item at a percentage-based location.
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-                    ]
-                }],
-                generationConfig: {
-                    responseModalities: ['IMAGE']
-                }
-            };
-            
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
 
             try {
+                // 1. Create composite image on canvas
+                const compositeImageBase64 = await createCompositeImage();
+
+                // 2. Send composite image to AI for refinement
+                loadingText.textContent = 'AIが画像を調整中です...';
+                
+                const prompt = `This is a composite image. Please blend the newly added tableware item ('${selectedDish.text}') into the table setting naturally. Adjust lighting, shadows, reflections, and perspective to make it look realistic and seamless. Do not change any other part of the image.`;
+                const base64Data = compositeImageBase64.split(',')[1];
+                
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE']
+                    }
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+                
                 const response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -356,11 +315,49 @@
             } catch (error) {
                 console.error("Image generation failed:", error);
                 showError(`画像の生成に失敗しました。詳細: ${error.message}`);
-                // Revert to editor state on failure
                 loadingSection.classList.add('hidden');
                 editorSection.classList.remove('hidden'); 
                 resetToSelectionStep();
             }
+        }
+
+        function createCompositeImage() {
+            return new Promise((resolve, reject) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const baseImage = new Image();
+                baseImage.src = originalImageBase64;
+                baseImage.onload = () => {
+                    canvas.width = baseImage.naturalWidth;
+                    canvas.height = baseImage.naturalHeight;
+                    ctx.drawImage(baseImage, 0, 0);
+
+                    const itemImage = new Image();
+                    itemImage.crossOrigin = "anonymous";
+                    // Using the new key 'image' for the item URL
+                    itemImage.src = selectedDish.image;
+                    itemImage.onload = () => {
+                        const imgRect = uploadedImage.getBoundingClientRect();
+                        const markerRect = placementMarker.getBoundingClientRect();
+
+                        const scaleX = baseImage.naturalWidth / imgRect.width;
+                        const scaleY = baseImage.naturalHeight / imgRect.height;
+
+                        const drawX = (markerRect.left - imgRect.left) * scaleX;
+                        const drawY = (markerRect.top - imgRect.top) * scaleY;
+
+                        const itemWidth = baseImage.naturalWidth * 0.15;
+                        const itemHeight = itemImage.height * (itemWidth / itemImage.width);
+
+                        ctx.drawImage(itemImage, drawX - itemWidth / 2, drawY - itemHeight / 2, itemWidth, itemHeight);
+
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    itemImage.onerror = (err) => reject(new Error('選択された食器画像の読み込みに失敗しました。'));
+                };
+                baseImage.onerror = () => reject(new Error('ベース画像の読み込みに失敗しました。'));
+            });
         }
         
         function resetToSelectionStep() {
@@ -406,11 +403,10 @@
             for (let i = 0; i < retries; i++) {
                 try {
                     const response = await fetch(url, options);
-                    // Don't retry on client-side errors, only server/rate-limit errors
                     if (response.status < 500 && response.status !== 429) { 
                         return response;
                     }
-                    if (i === retries - 1) return response; // Return last failed response
+                    if (i === retries - 1) return response;
                 } catch (error) {
                     if (i === retries - 1) throw error;
                 }

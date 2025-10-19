@@ -58,47 +58,84 @@ const GlobalStyles = () => {
     `;
     document.head.appendChild(styleElement);
 
-    // クリーンアップ関数
     return () => {
       document.head.removeChild(styleElement);
     };
-  }, []); // 空の依存配列で、コンポーネントのマウント時に一度だけ実行
+  }, []);
 
-  return null; // このコンポーネントはUIを描画しない
+  return null;
 };
 
 
 // =================================================================================
-// API通信ユーティリティ
+// API通信・画像処理ユーティリティ
 // =================================================================================
 
 /**
  * リトライ機能付きのfetchリクエストを送信する関数。
- * サーバーエラーやレート制限時に自動で再試行します。
- * @param {string} url - リクエスト先のURL
- * @param {object} options - fetchのオプション
- * @param {number} retries - 最大リトライ回数
- * @param {number} delay - リトライ間隔（ミリ秒）
- * @returns {Promise<Response>} fetchのレスポンス
  */
 const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
     for (let i = 0; i < retries; i++) {
         try {
             const response = await fetch(url, options);
-            // サーバーエラー(5xx)やレートリミット(429)でない場合はリトライせずに即時返す
             if (response.status < 500 && response.status !== 429) {
                 return response;
             }
-            // 最後のリトライでも失敗した場合は、そのレスポンスを返す
             if (i === retries - 1) return response;
         } catch (error) {
-            // 最後のリトライでネットワークエラーなどが発生した場合は、エラーをスローする
             if (i === retries - 1) throw error;
         }
-        // 指数関数的バックオフで待機
         await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
     }
     throw new Error("Max retries reached");
+};
+
+/**
+ * 元画像と選択された食器画像を合成する関数。
+ * @param {string} originalImageBase64 - 元画像のBase64文字列
+ * @param {{image: string, text: string}} selectedDish - 選択された食器オブジェクト
+ * @param {{x: number, y: number}} placementCoordinates - 食器を配置する座標
+ * @param {HTMLElement} displayedImageElement - 画面に表示されているimg要素
+ * @returns {Promise<string>} 合成された画像のBase64文字列
+ */
+const createCompositeImage = (originalImageBase64, selectedDish, placementCoordinates, displayedImageElement) => {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const baseImage = new Image();
+        baseImage.src = originalImageBase64;
+        baseImage.onload = () => {
+            canvas.width = baseImage.naturalWidth;
+            canvas.height = baseImage.naturalHeight;
+            ctx.drawImage(baseImage, 0, 0);
+
+            const itemImage = new Image();
+            itemImage.crossOrigin = "anonymous";
+            itemImage.src = selectedDish.image;
+            itemImage.onload = () => {
+                const displayedImgRect = displayedImageElement.getBoundingClientRect();
+
+                // 表示上の座標と元画像の座標のスケールを計算
+                const scaleX = baseImage.naturalWidth / displayedImgRect.width;
+                const scaleY = baseImage.naturalHeight / displayedImgRect.height;
+
+                // Canvasに描画する中心座標を計算
+                const drawX = placementCoordinates.x * scaleX;
+                const drawY = placementCoordinates.y * scaleY;
+
+                // 食器画像のサイズを元画像の幅の15%に設定
+                const itemWidth = baseImage.naturalWidth * 0.15;
+                const itemHeight = itemImage.height * (itemWidth / itemImage.width);
+
+                // 中心座標からオフセットして描画
+                ctx.drawImage(itemImage, drawX - itemWidth / 2, drawY - itemHeight / 2, itemWidth, itemHeight);
+                resolve(canvas.toDataURL('image/jpeg'));
+            };
+            itemImage.onerror = () => reject(new Error('選択された食器画像の読み込みに失敗しました。'));
+        };
+        baseImage.onerror = () => reject(new Error('ベース画像の読み込みに失敗しました。'));
+    });
 };
 
 
@@ -106,10 +143,6 @@ const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
 // UIコンポーネント
 // =================================================================================
 
-/**
- * ヘッダーコンポーネント
- * @returns {React.ReactElement}
- */
 const Header = () => (
     <header className="text-center mb-6">
         <h1 className="text-3xl md:text-4xl font-bold text-[#8C5E4A]">ozendate</h1>
@@ -117,11 +150,6 @@ const Header = () => (
     </header>
 );
 
-/**
- * ステップ1: 画像アップロードセクション
- * @param {{onImageUpload: (file: File) => void}} props
- * @returns {React.ReactElement}
- */
 const UploadSection = ({ onImageUpload }) => {
     const fileInputRef = useRef(null);
     const handleDivClick = () => fileInputRef.current?.click();
@@ -146,20 +174,6 @@ const UploadSection = ({ onImageUpload }) => {
     );
 };
 
-/**
- * ステップ2: 編集セクション
- * @param {{
- * originalImageSource: string;
- * onImageClick: (coords: {x: number, y: number}) => void;
- * placementCoordinates: {x: number, y: number} | null;
- * isRecommendationLoading: boolean;
- * recommendations: Array<{name_ja: string, name_en: string}>;
- * onDishSelect: (dish: {name_ja: string, name_en: string}) => void;
- * isSelectionLocked: boolean;
- * selectedDish: {name_ja: string, name_en: string} | null;
- * }} props
- * @returns {React.ReactElement}
- */
 const EditorSection = ({
     originalImageSource,
     onImageClick,
@@ -168,27 +182,22 @@ const EditorSection = ({
     recommendations,
     onDishSelect,
     isSelectionLocked,
-    selectedDish
+    selectedDish,
+    imageRef
 }) => {
-    const imageContainerRef = useRef(null);
-
     const handleImageContainerClick = (event) => {
-        // 画像へのクリックは、場所が未指定の場合のみ有効
         if (placementCoordinates) return;
-
-        const container = imageContainerRef.current;
-        if (container) {
-            const rect = container.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            onImageClick({ x, y });
-        }
+        const container = event.currentTarget;
+        const rect = container.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        onImageClick({ x, y });
     };
 
     const getInstructionText = () => {
         if (!placementCoordinates) return '1. 新しい食器を置きたい場所をクリックしてください。';
-        if (isRecommendationLoading) return 'AIがあなたにおすすめの食器を考えています...';
-        if (recommendations.length > 0) return '2. AIの提案から追加したい食器を選んでください。';
+        if (isRecommendationLoading) return 'おすすめの食器を探しています...';
+        if (recommendations.length > 0) return '2. 提案から追加したい食器を選んでください。';
         return '';
     };
 
@@ -198,45 +207,24 @@ const EditorSection = ({
                 <p>{getInstructionText()}</p>
             </div>
 
-            <div
-                ref={imageContainerRef}
-                onClick={handleImageContainerClick}
-                className={`relative rounded-lg overflow-hidden shadow-md mx-auto max-w-2xl ${!placementCoordinates ? 'cursor-crosshair' : ''} ${selectedDish ? 'image-container-dimmed' : ''}`}
-            >
-                <img src={originalImageSource} alt="アップロードされたテーブル" className="w-full h-auto" />
+            <div onClick={handleImageContainerClick} className={`relative rounded-lg overflow-hidden shadow-md mx-auto max-w-2xl ${!placementCoordinates ? 'cursor-crosshair' : ''} ${selectedDish ? 'image-container-dimmed' : ''}`}>
+                <img ref={imageRef} src={originalImageSource} alt="アップロードされたテーブル" className="w-full h-auto" />
                 {placementCoordinates && (
-                    <div
-                        className="absolute"
-                        style={{
-                            left: `${placementCoordinates.x - 15}px`,
-                            top: `${placementCoordinates.y - 15}px`,
-                            width: '30px',
-                            height: '30px',
-                            border: '3px solid #8C5E4A',
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(140, 94, 74, 0.3)',
-                            boxShadow: '0 0 10px rgba(0,0,0,0.5)',
-                            pointerEvents: 'none',
-                        }}
-                    />
+                    <div className="absolute" style={{ left: `${placementCoordinates.x - 15}px`, top: `${placementCoordinates.y - 15}px`, width: '30px', height: '30px', border: '3px solid #8C5E4A', borderRadius: '50%', backgroundColor: 'rgba(140, 94, 74, 0.3)', boxShadow: '0 0 10px rgba(0,0,0,0.5)', pointerEvents: 'none' }} />
                 )}
             </div>
 
             {(isRecommendationLoading || recommendations.length > 0) && (
                 <div className="mt-6">
-                    <h2 className="text-lg font-semibold mb-3 text-center text-gray-700">AIのおすすめ</h2>
+                    <h2 className="text-lg font-semibold mb-3 text-center text-gray-700">おすすめの食器</h2>
                     <div className="flex space-x-4 overflow-x-auto pb-4 recommendations-scrollbar">
                         {isRecommendationLoading ? (
                             <div className="w-full flex justify-center py-8"><div className="loader"></div></div>
                         ) : (
                             recommendations.map((dish) => (
-                                <div
-                                    key={dish.name_en}
-                                    className={`recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md border ${isSelectionLocked ? 'opacity-60 pointer-events-none' : 'cursor-pointer'} ${selectedDish?.name_en === dish.name_en ? 'recommendation-card-selected' : ''}`}
-                                    onClick={() => !isSelectionLocked && onDishSelect(dish)}
-                                >
-                                    <img src={`https://placehold.co/200x200/EAE5DB/333333?text=${encodeURIComponent(dish.name_ja)}`} alt={dish.name_ja} className="w-full h-24 object-cover rounded-md mx-auto" />
-                                    <p className="text-xs font-semibold mt-2 text-center">{dish.name_ja}</p>
+                                <div key={dish.image} className={`recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md border ${isSelectionLocked ? 'opacity-60 pointer-events-none' : 'cursor-pointer'} ${selectedDish?.image === dish.image ? 'recommendation-card-selected' : ''}`} onClick={() => !isSelectionLocked && onDishSelect(dish)}>
+                                    <img src={dish.image} alt={dish.text} className="w-full h-24 object-cover rounded-md mx-auto" crossOrigin="anonymous" />
+                                    <p className="text-xs font-semibold mt-2 text-center">{dish.text}</p>
                                 </div>
                             ))
                         )}
@@ -247,11 +235,6 @@ const EditorSection = ({
     );
 };
 
-/**
- * ステップ3: ローディングセクション
- * @param {{text: string}} props
- * @returns {React.ReactElement}
- */
 const LoadingSection = ({ text }) => (
     <section className="text-center py-12">
         <div className="loader mx-auto"></div>
@@ -260,11 +243,6 @@ const LoadingSection = ({ text }) => (
     </section>
 );
 
-/**
- * ステップ4: 結果表示セクション
- * @param {{generatedImageSource: string; onReset: () => void}} props
- * @returns {React.ReactElement}
- */
 const ResultSection = ({ generatedImageSource, onReset }) => (
     <section className="text-center">
         <h2 className="text-2xl font-bold mb-4 text-gray-800">✨ 完成です！ ✨</h2>
@@ -275,11 +253,6 @@ const ResultSection = ({ generatedImageSource, onReset }) => (
     </section>
 );
 
-/**
- * エラーモーダル
- * @param {{message: string; onClose: () => void}} props
- * @returns {React.ReactElement}
- */
 const ErrorModal = ({ message, onClose }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-lg p-6 shadow-xl text-center max-w-sm">
@@ -296,48 +269,19 @@ const ErrorModal = ({ message, onClose }) => (
 // メインアプリケーションコンポーネント
 // =================================================================================
 
-/**
- * アプリケーションのメインコンポーネント。
- * 全体の状態管理とビジネスロジックを担当します。
- */
 export default function App() {
-    // --- 状態管理 (State) ---
-    // アプリケーションの現在の表示状態を管理 (UPLOAD, EDIT, LOADING, RESULT)
     const [applicationStatus, setApplicationStatus] = useState('UPLOAD');
-    
-    // アップロードされた元の画像(Base64形式)
     const [originalImageSource, setOriginalImageSource] = useState(null);
-    
-    // ユーザーがクリックした食器の配置座標
     const [placementCoordinates, setPlacementCoordinates] = useState(null);
-    
-    // AIから提案された食器のリスト
     const [recommendations, setRecommendations] = useState([]);
-    
-    // ユーザーが選択した食器
     const [selectedDish, setSelectedDish] = useState(null);
-    
-    // AIによって生成された最終的な画像(Base64形式)
     const [generatedImageSource, setGeneratedImageSource] = useState(null);
-    
-    // API通信中のローディング状態
     const [isLoading, setIsLoading] = useState(false);
-    
-    // ローディング中に表示するテキスト
     const [loadingText, setLoadingText] = useState('');
-    
-    // エラーメッセージ
     const [errorMessage, setErrorMessage] = useState('');
+    const uploadedImageRef = useRef(null); // 表示されている画像要素への参照
+    const API_KEY = "";
 
-    // --- APIキー (環境変数などから取得するのが望ましい) ---
-    const API_KEY = ""; // NOTE: 実行には有効なAPIキーが必要です
-
-    // --- イベントハンドラ ---
-
-    /**
-     * 画像ファイルがアップロードされたときの処理
-     * @param {File} file - アップロードされたファイル
-     */
     const handleImageUpload = useCallback((file) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -347,79 +291,49 @@ export default function App() {
         reader.readAsDataURL(file);
     }, []);
 
-    /**
-     * 編集画面で画像がクリックされたときの処理
-     * @param {{x: number, y: number}} coordinates - クリックされた座標
-     */
     const handleImageClick = useCallback(async (coordinates) => {
         setPlacementCoordinates(coordinates);
-        setRecommendations([]); // おすすめリストをリセット
         setIsLoading(true);
-
-        const prompt = `Analyze the attached image of a table setting. A user wants to place a new item. Suggest 5 diverse types of tableware (like 'a small blue ceramic bowl', 'a rustic wooden plate', 'a modern glass cup') that would complement the existing items in terms of style, color, and occasion. Provide the response as a valid JSON array of objects, where each object has a 'name_ja' (Japanese name) and a 'name_en' (English name for the image generation prompt).`;
-        const base64Data = originalImageSource.split(',')[1];
-        
-        const payload = {
-            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64Data } }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: { "name_ja": { "type": "STRING" }, "name_en": { "type": "STRING" } },
-                        required: ["name_ja", "name_en"]
-                    }
-                }
-            }
-        };
-
+        const jsonUrl = 'https://raw.githubusercontent.com/jphacks/tk_b_2512/main/json/consumer.json';
         try {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
-            const response = await fetchWithRetry(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`API error (${response.status}): ${await response.text()}`);
-            
-            const result = await response.json();
-            const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!jsonText) throw new Error("APIから有効なJSONテキストが返されませんでした。");
-
-            setRecommendations(JSON.parse(jsonText));
+            const response = await fetch(jsonUrl);
+            if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
+            const dishes = await response.json();
+            setRecommendations(dishes);
         } catch (error) {
-            console.error("Failed to get AI recommendations:", error);
-            setErrorMessage(`AIによる提案の取得に失敗しました。${error.message}`);
-            // エラーが発生したらクリック前の状態に戻す
+            console.error("Failed to fetch dish recommendations:", error);
+            setErrorMessage(`食器リストの取得に失敗しました。${error.message}`);
             setPlacementCoordinates(null);
         } finally {
             setIsLoading(false);
         }
-    }, [originalImageSource, API_KEY]);
+    }, []);
 
-    /**
-     * おすすめの食器が選択されたときの処理
-     * @param {{name_ja: string, name_en: string}} dish - 選択された食器
-     */
     const handleDishSelect = useCallback(async (dish) => {
         setSelectedDish(dish);
         setApplicationStatus('LOADING');
-        setLoadingText('AIが画像を生成中です...');
+        setLoadingText('画像を合成しています...');
         
-        // 選択した食器の視覚フィードバックを見せるため少し待つ
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const prompt = `Photo of a table setting. Place ${dish.name_en} on the table. The desired location for the new item is at the center of the provided mask area. The new item should blend in naturally with the existing lighting, shadows, and perspective. Maintain the original image's style and quality. Do not change anything else in the image.`;
-        const base64Data = originalImageSource.split(',')[1];
-        
-        const payload = {
-            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64Data } }] }],
-            generationConfig: { responseModalities: ['IMAGE'] }
-        };
-
         try {
+            // ステップ1: 画像をクライアントサイドで合成
+            const compositeImageBase64 = await createCompositeImage(
+                originalImageSource,
+                dish,
+                placementCoordinates,
+                uploadedImageRef.current
+            );
+            
+            setLoadingText('AIが画像を調整中です...');
+
+            // ステップ2: 合成した画像をAIで調整
+            const prompt = `This is a composite image. Please blend the newly added tableware item ('${dish.text}') into the table setting naturally. Adjust lighting, shadows, reflections, and perspective to make it look realistic and seamless. Do not change any other part of the image.`;
+            const base64Data = compositeImageBase64.split(',')[1];
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64Data } }] }],
+                generationConfig: { responseModalities: ['IMAGE'] }
+            };
+
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${API_KEY}`;
             const response = await fetchWithRetry(apiUrl, {
                 method: 'POST',
@@ -440,19 +354,14 @@ export default function App() {
                 console.error('API Response:', JSON.stringify(result, null, 2));
                 throw new Error("生成された画像データがAPIレスポンスに含まれていませんでした。");
             }
-
         } catch (error) {
             console.error("Image generation failed:", error);
             setErrorMessage(`画像の生成に失敗しました。詳細: ${error.message}`);
-            // 失敗した場合は編集画面に戻る
             setApplicationStatus('EDIT');
-            setSelectedDish(null); // 選択を解除
+            setSelectedDish(null);
         }
-    }, [originalImageSource, API_KEY]);
+    }, [originalImageSource, placementCoordinates, API_KEY]);
 
-    /**
-     * アプリケーションを初期状態にリセットする処理
-     */
     const handleReset = useCallback(() => {
         setApplicationStatus('UPLOAD');
         setOriginalImageSource(null);
@@ -465,12 +374,7 @@ export default function App() {
         setErrorMessage('');
     }, []);
 
-    /**
-     * エラーモーダルを閉じる処理
-     */
     const closeErrorModal = useCallback(() => setErrorMessage(''), []);
-
-    // --- レンダリング ---
 
     return (
         <>
@@ -478,32 +382,27 @@ export default function App() {
             <div className="min-h-screen flex items-center justify-center p-4">
                 <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
                     <Header />
-
                     {applicationStatus === 'UPLOAD' && <UploadSection onImageUpload={handleImageUpload} />}
-                    
                     {applicationStatus === 'EDIT' && originalImageSource && (
                         <EditorSection
                             originalImageSource={originalImageSource}
                             onImageClick={handleImageClick}
                             placementCoordinates={placementCoordinates}
-                            isRecommendationLoading={isLoading && recommendations.length === 0}
+                            isRecommendationLoading={isLoading}
                             recommendations={recommendations}
                             onDishSelect={handleDishSelect}
                             isSelectionLocked={!!selectedDish}
                             selectedDish={selectedDish}
+                            imageRef={uploadedImageRef}
                         />
                     )}
-                    
                     {applicationStatus === 'LOADING' && <LoadingSection text={loadingText} />}
-                    
                     {applicationStatus === 'RESULT' && generatedImageSource && (
                         <ResultSection generatedImageSource={generatedImageSource} onReset={handleReset} />
                     )}
-
                 </div>
             </div>
             {errorMessage && <ErrorModal message={errorMessage} onClose={closeErrorModal} />}
         </>
     );
 }
-
