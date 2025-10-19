@@ -104,8 +104,10 @@ ozendateは、AIでテーブルコーディネートを試しながら、楽し�
     * 複数の画像を重ね合わせた一枚の画像を用意した後に、AIが自然な画像にするよう処理する。
 
 ### ローカルで動かす時の注意点
-- 現段階ではGeminiのCanvasでないと動かない
-- デプロイURL : https://gemini.google.com/share/45104a64545b
+- 現段階ではGeminiのCanvasでないと無料で動かない
+    - デプロイURL : https://gemini.google.com/share/45104a64545b
+
+※ 画像生成の権限が付与されている有料のGemini APIを準備し、ソースコード中の`apiKey`に代入すればローカルでも動作する
 
    
 # [prefix（プレフィックス）](https://qiita.com/numanomanu/items/45dd285b286a1f7280ed)
