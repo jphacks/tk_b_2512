@@ -86,7 +86,7 @@
             </div>
 
             <div id="recommendations" class="hidden mt-6">
-                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">AIのおすすめ</h2>
+                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">AIが選んだおすすめの食器</h2>
                  <div id="recommendations-container" class="flex space-x-4 overflow-x-auto pb-4">
                     <!-- Recommendation items will be injected by JS -->
                  </div>
@@ -166,7 +166,6 @@
         }
 
         function handleImageClick(event) {
-            // Only proceed if we haven't started showing recommendations yet
             if (!recommendations.classList.contains('hidden')) {
                 return;
             }
@@ -192,19 +191,51 @@
             placementMarker.style.pointerEvents = 'none';
             imageContainer.appendChild(placementMarker);
             
-            // New flow: get AI recommendations
-            getAiDishRecommendations();
+            fetchDishRecommendations();
         }
 
-        async function getAiDishRecommendations() {
-            instructionText.textContent = 'AIがあなたにおすすめの食器を考えています...';
+        async function fetchDishRecommendations() {
+            instructionText.textContent = 'AIがあなたのテーブルに合う食器を分析中です...';
             recommendations.classList.remove('hidden');
             recommendationsContainer.innerHTML = `<div class="w-full flex justify-center py-8"><div class="loader"></div></div>`;
             imageContainer.style.cursor = 'default';
 
-            const prompt = `Analyze the attached image of a table setting. A user wants to place a new item. Suggest 5 diverse types of tableware (like 'a small blue ceramic bowl', 'a rustic wooden plate', 'a modern glass cup') that would complement the existing items in terms of style, color, and occasion. Provide the response as a valid JSON array of objects, where each object has a 'name_ja' (Japanese name) and a 'name_en' (English name for the image generation prompt).`;
-            const base64Data = originalImageBase64.split(',')[1];
-            
+            const jsonUrl = 'https://raw.githubusercontent.com/jphacks/tk_b_2512/main/json/consumer.json';
+
+            try {
+                // 1. Fetch all possible dishes
+                const response = await fetch(jsonUrl);
+                if (!response.ok) {
+                    throw new Error(`食器リストの取得に失敗しました: ${response.statusText}`);
+                }
+                const allDishes = await response.json();
+
+                // 2. Get AI recommendations based on the uploaded image and all dishes
+                const recommendedDishes = await getAIRecommendations(originalImageBase64, allDishes);
+
+                // 3. Display the 4 recommended dishes
+                displayRecommendations(recommendedDishes);
+
+            } catch (error) {
+                console.error("Failed to get dish recommendations:", error);
+                showError(`食器のおすすめの取得に失敗しました。${error.message}`);
+                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">おすすめの取得に失敗しました。</p>`;
+            }
+        }
+
+        async function getAIRecommendations(imageBase64, allDishes) {
+            const prompt = `
+                You are an expert table coordinator AI. Based on the provided image of a user's table setting, please select the 4 most suitable dishes from the following JSON list.
+                Analyze the style, color palette, materials, and overall mood of the user's image to make your selections.
+
+                Available dishes list:
+                ${JSON.stringify(allDishes, null, 2)}
+
+                Your response MUST be a valid JSON array containing exactly 4 dish objects, copied precisely from the provided list. Do not include any other text or explanations.
+            `;
+
+            const base64Data = imageBase64.split(',')[1];
+
             const payload = {
                 contents: [{
                     parts: [
@@ -213,60 +244,54 @@
                     ]
                 }],
                 generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "name_ja": { "type": "STRING" },
-                                "name_en": { "type": "STRING" }
-                            },
-                            required: ["name_ja", "name_en"]
-                        }
-                    }
+                  responseMimeType: "application/json",
                 }
             };
 
-            const apiKey = ""; 
+            const apiKey = ""; // APIキーは実行環境で自動的に設定されます
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
+            const response = await fetchWithRetry(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`AI APIエラー (${response.status}): ${errorText}`);
+            }
+
+            const result = await response.json();
+            const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!responseText) {
+                console.error('AI Response:', JSON.stringify(result, null, 2));
+                throw new Error("AIからの応答が空でした。");
+            }
+
             try {
-                const response = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API error (${response.status}): ${await response.text()}`);
+                const recommendedDishes = JSON.parse(responseText);
+                if (!Array.isArray(recommendedDishes) || recommendedDishes.length > 4) { // 4つ以下でも許容
+                     console.warn("AI response was not an array of 4 items, but will proceed.", recommendedDishes);
                 }
-                
-                const result = await response.json();
-                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                const recommendedDishes = JSON.parse(jsonText);
-                
-                displayRecommendations(recommendedDishes);
-
-            } catch (error) {
-                console.error("Failed to get AI recommendations:", error);
-                showError(`AIによる提案の取得に失敗しました。${error.message}`);
-                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">提案の取得に失敗しました。</p>`;
+                return recommendedDishes;
+            } catch (parseError) {
+                console.error("Failed to parse AI response:", responseText);
+                throw new Error(`AIの応答を解析できませんでした。 ${parseError.message}`);
             }
         }
 
         function displayRecommendations(dishes) {
-            instructionText.textContent = '2. AIの提案から追加したい食器を選んでください。';
-            recommendationsContainer.innerHTML = ''; // Clear loader
+            instructionText.textContent = '2. 提案から追加したい食器を選んでください。';
+            recommendationsContainer.innerHTML = '';
             
             dishes.forEach(dish => {
                 const card = document.createElement('div');
                 card.className = 'recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md cursor-pointer border';
-                // Using placeholder images based on the dish name
-                const placeholderImg = `https://placehold.co/200x200/EAE5DB/333333?text=${encodeURIComponent(dish.name_ja)}`;
                 card.innerHTML = `
-                    <img src="${placeholderImg}" alt="${dish.name_ja}" class="w-full h-24 object-cover rounded-md mx-auto">
-                    <p class="text-xs font-semibold mt-2 text-center">${dish.name_ja}</p>
+                    <img src="${dish.image}" alt="${dish.text}" class="w-full h-24 object-cover rounded-md mx-auto" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://placehold.co/150x100/FDFBF8/8C5E4A?text=No+Image';">
+                    <p class="text-xs font-semibold mt-2 text-center">${dish.text}</p>
                 `;
                 card.onclick = (event) => selectDish(dish, event.currentTarget);
                 recommendationsContainer.appendChild(card);
@@ -274,7 +299,7 @@
         }
 
         function selectDish(dish, selectedCard) {
-             if(selectedDish) return; // Prevent multiple selections
+             if(selectedDish) return;
 
             selectedDish = dish;
             imageContainer.classList.add('dimmed');
@@ -289,6 +314,7 @@
             setTimeout(generateImage, 500);
         }
 
+        // --- Image Composition and API Call ---
         async function generateImage() {
             if (!originalImageBase64 || !selectedDish || !placementMarker) {
                 showError("画像、配置場所、食器が選択されていません。");
@@ -296,39 +322,34 @@
             }
 
             editorSection.classList.add('hidden');
-            loadingText.textContent = 'AIが画像を生成中です...';
+            loadingText.textContent = '画像を合成しています...';
             loadingSection.classList.remove('hidden');
-            
-            const rect = uploadedImage.getBoundingClientRect();
-            const markerRect = placementMarker.getBoundingClientRect();
-            
-            const relativeX = markerRect.left + markerRect.width / 2 - rect.left;
-            const relativeY = markerRect.top + markerRect.height / 2 - rect.top;
-
-            const percentX = (relativeX / rect.width) * 100;
-            const percentY = (relativeY / rect.height) * 100;
-            
-            const prompt = `Photo of a table setting. Place ${selectedDish.name_en} on the table. The desired location for the new item is at the center of the provided mask area. The new item should blend in naturally with the existing lighting, shadows, and perspective. Maintain the original image's style and quality. Do not change anything else in the image.`;
-            const base64Data = originalImageBase64.split(',')[1];
-            
-            // For now, we will use a simpler image generation API call as inpainting is complex.
-            // The prompt asks the model to place the item at a percentage-based location.
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-                    ]
-                }],
-                generationConfig: {
-                    responseModalities: ['IMAGE']
-                }
-            };
-            
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
 
             try {
+                // 1. Create composite image on canvas
+                const compositeImageBase64 = await createCompositeImage();
+
+                // 2. Send composite image to AI for refinement
+                loadingText.textContent = 'AIが画像を調整中です...';
+                
+                const prompt = `This is a composite image. Please blend the newly added tableware item ('${selectedDish.text}') into the table setting naturally. Adjust lighting, shadows, reflections, and perspective to make it look realistic and seamless. Do not change any other part of the image.`;
+                const base64Data = compositeImageBase64.split(',')[1];
+                
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE']
+                    }
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+                
                 const response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -356,11 +377,48 @@
             } catch (error) {
                 console.error("Image generation failed:", error);
                 showError(`画像の生成に失敗しました。詳細: ${error.message}`);
-                // Revert to editor state on failure
                 loadingSection.classList.add('hidden');
                 editorSection.classList.remove('hidden'); 
                 resetToSelectionStep();
             }
+        }
+
+        function createCompositeImage() {
+            return new Promise((resolve, reject) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const baseImage = new Image();
+                baseImage.src = originalImageBase64;
+                baseImage.onload = () => {
+                    canvas.width = baseImage.naturalWidth;
+                    canvas.height = baseImage.naturalHeight;
+                    ctx.drawImage(baseImage, 0, 0);
+
+                    const itemImage = new Image();
+                    itemImage.crossOrigin = "anonymous";
+                    itemImage.src = selectedDish.image;
+                    itemImage.onload = () => {
+                        const imgRect = uploadedImage.getBoundingClientRect();
+                        const markerRect = placementMarker.getBoundingClientRect();
+
+                        const scaleX = baseImage.naturalWidth / imgRect.width;
+                        const scaleY = baseImage.naturalHeight / imgRect.height;
+
+                        const drawX = (markerRect.left - imgRect.left + markerRect.width / 2) * scaleX;
+                        const drawY = (markerRect.top - imgRect.top + markerRect.height / 2) * scaleY;
+
+                        const itemWidth = baseImage.naturalWidth * 0.15;
+                        const itemHeight = itemImage.height * (itemWidth / itemImage.width);
+
+                        ctx.drawImage(itemImage, drawX - itemWidth / 2, drawY - itemHeight / 2, itemWidth, itemHeight);
+
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    itemImage.onerror = (err) => reject(new Error('選択された食器画像の読み込みに失敗しました。'));
+                };
+                baseImage.onerror = () => reject(new Error('ベース画像の読み込みに失敗しました。'));
+            });
         }
         
         function resetToSelectionStep() {
@@ -406,11 +464,10 @@
             for (let i = 0; i < retries; i++) {
                 try {
                     const response = await fetch(url, options);
-                    // Don't retry on client-side errors, only server/rate-limit errors
                     if (response.status < 500 && response.status !== 429) { 
                         return response;
                     }
-                    if (i === retries - 1) return response; // Return last failed response
+                    if (i === retries - 1) return response;
                 } catch (error) {
                     if (i === retries - 1) throw error;
                 }
@@ -421,3 +478,4 @@
     </script>
 </body>
 </html>
+
