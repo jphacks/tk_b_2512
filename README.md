@@ -1,7 +1,6 @@
 # ozendate
 
-[![IMAGE ALT TEXT HERE](https://jphacks.com/wp-content/uploads/2025/05/JPHACKS2025_ogp.jpg)](https://www.youtube.com/watch?v=lA9EluZugD8)
-
+[![IMAGE ALT TEXT HERE](https://raw.githubusercontent.com/jphacks/tk_b_2512/refs/heads/doc/19/updatereadme/image/ozendate.png)](https://drive.google.com/file/d/12lvIkgJLO_FViAfK5Ih9vw-exEeCjeY0/view)
 
 ## 製品概要
 ### 背景
@@ -9,7 +8,7 @@
 また、商品写真だけだと実際に置いた時のイメージがわきにくく、購入に踏み切れない。
 
 ### 製品説明
-ozendateは、AIでテーブルコーディネートを試しながら、楽しくオンラインで器を選べるサービスだ。
+ozendateは、AIでテーブルコーディネートを試しながら、楽しくオンラインで器を選べるサービスである。
 
 #### 使い方
 1. 現状のテーブルコーディネートをアップロード
@@ -39,6 +38,9 @@ ozendateは、AIでテーブルコーディネートを試しながら、楽し�
 - イメージが視覚化されて、購入前の不安を取り除くことができる。
 
 ### 今後の展望
+- プロンプトのカスタマイズ
+    - ユーザーの持つ抽象的なイメージやこだわりをプロンプトとして反映し、最適な器を提案できるようにする
+      * 「お城風に」「シックに」など
 - データ取得
     - 商品リストを実在するecサイトから取得するよう変更する。
     - プロトタイプでは、事前に入力済みのデータを用いて表示
@@ -100,6 +102,10 @@ ozendateは、AIでテーブルコーディネートを試しながら、楽し�
 #### ハッカソンで開発した独自機能・技術
 * 独自機能
     * 複数の画像を重ね合わせた一枚の画像を用意した後に、AIが自然な画像にするよう処理する。
+
+### ローカルで動かす時の注意点
+- 現段階ではGeminiのCanvasでないと動かない
+- デプロイURL : https://gemini.google.com/share/45104a64545b
 
    
 # [prefix（プレフィックス）](https://qiita.com/numanomanu/items/45dd285b286a1f7280ed)
