@@ -86,7 +86,7 @@
             </div>
 
             <div id="recommendations" class="hidden mt-6">
-                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">おすすめの食器</h2>
+                 <h2 class="text-lg font-semibold mb-3 text-center text-gray-700">AIが選んだおすすめの食器</h2>
                  <div id="recommendations-container" class="flex space-x-4 overflow-x-auto pb-4">
                     <!-- Recommendation items will be injected by JS -->
                  </div>
@@ -195,27 +195,90 @@
         }
 
         async function fetchDishRecommendations() {
-            instructionText.textContent = 'おすすめの食器を探しています...';
+            instructionText.textContent = 'AIがあなたのテーブルに合う食器を分析中です...';
             recommendations.classList.remove('hidden');
             recommendationsContainer.innerHTML = `<div class="w-full flex justify-center py-8"><div class="loader"></div></div>`;
             imageContainer.style.cursor = 'default';
 
-            // Corrected URL from the prompt, assuming the user provided the correct one.
             const jsonUrl = 'https://raw.githubusercontent.com/jphacks/tk_b_2512/main/json/consumer.json';
 
             try {
+                // 1. Fetch all possible dishes
                 const response = await fetch(jsonUrl);
                 if (!response.ok) {
-                    throw new Error(`Network response was not ok: ${response.statusText}`);
+                    throw new Error(`食器リストの取得に失敗しました: ${response.statusText}`);
                 }
-                // The new JSON has a different structure, let's adapt.
-                const dishes = await response.json();
-                displayRecommendations(dishes);
+                const allDishes = await response.json();
+
+                // 2. Get AI recommendations based on the uploaded image and all dishes
+                const recommendedDishes = await getAIRecommendations(originalImageBase64, allDishes);
+
+                // 3. Display the 4 recommended dishes
+                displayRecommendations(recommendedDishes);
 
             } catch (error) {
-                console.error("Failed to fetch dish recommendations:", error);
-                showError(`食器リストの取得に失敗しました。${error.message}`);
-                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">リストの取得に失敗しました。</p>`;
+                console.error("Failed to get dish recommendations:", error);
+                showError(`食器のおすすめの取得に失敗しました。${error.message}`);
+                recommendationsContainer.innerHTML = `<p class="text-red-500 text-center w-full">おすすめの取得に失敗しました。</p>`;
+            }
+        }
+
+        async function getAIRecommendations(imageBase64, allDishes) {
+            const prompt = `
+                You are an expert table coordinator AI. Based on the provided image of a user's table setting, please select the 4 most suitable dishes from the following JSON list.
+                Analyze the style, color palette, materials, and overall mood of the user's image to make your selections.
+
+                Available dishes list:
+                ${JSON.stringify(allDishes, null, 2)}
+
+                Your response MUST be a valid JSON array containing exactly 4 dish objects, copied precisely from the provided list. Do not include any other text or explanations.
+            `;
+
+            const base64Data = imageBase64.split(',')[1];
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+                    ]
+                }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                }
+            };
+
+            const apiKey = ""; // APIキーは実行環境で自動的に設定されます
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const response = await fetchWithRetry(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`AI APIエラー (${response.status}): ${errorText}`);
+            }
+
+            const result = await response.json();
+            const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!responseText) {
+                console.error('AI Response:', JSON.stringify(result, null, 2));
+                throw new Error("AIからの応答が空でした。");
+            }
+
+            try {
+                const recommendedDishes = JSON.parse(responseText);
+                if (!Array.isArray(recommendedDishes) || recommendedDishes.length > 4) { // 4つ以下でも許容
+                     console.warn("AI response was not an array of 4 items, but will proceed.", recommendedDishes);
+                }
+                return recommendedDishes;
+            } catch (parseError) {
+                console.error("Failed to parse AI response:", responseText);
+                throw new Error(`AIの応答を解析できませんでした。 ${parseError.message}`);
             }
         }
 
@@ -226,9 +289,8 @@
             dishes.forEach(dish => {
                 const card = document.createElement('div');
                 card.className = 'recommendation-card w-40 flex-shrink-0 bg-white p-3 rounded-xl shadow-md cursor-pointer border';
-                // Using new keys 'image' for URL and 'text' for description
                 card.innerHTML = `
-                    <img src="${dish.image}" alt="${dish.text}" class="w-full h-24 object-cover rounded-md mx-auto" crossorigin="anonymous">
+                    <img src="${dish.image}" alt="${dish.text}" class="w-full h-24 object-cover rounded-md mx-auto" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://placehold.co/150x100/FDFBF8/8C5E4A?text=No+Image';">
                     <p class="text-xs font-semibold mt-2 text-center">${dish.text}</p>
                 `;
                 card.onclick = (event) => selectDish(dish, event.currentTarget);
@@ -335,7 +397,6 @@
 
                     const itemImage = new Image();
                     itemImage.crossOrigin = "anonymous";
-                    // Using the new key 'image' for the item URL
                     itemImage.src = selectedDish.image;
                     itemImage.onload = () => {
                         const imgRect = uploadedImage.getBoundingClientRect();
@@ -344,8 +405,8 @@
                         const scaleX = baseImage.naturalWidth / imgRect.width;
                         const scaleY = baseImage.naturalHeight / imgRect.height;
 
-                        const drawX = (markerRect.left - imgRect.left) * scaleX;
-                        const drawY = (markerRect.top - imgRect.top) * scaleY;
+                        const drawX = (markerRect.left - imgRect.left + markerRect.width / 2) * scaleX;
+                        const drawY = (markerRect.top - imgRect.top + markerRect.height / 2) * scaleY;
 
                         const itemWidth = baseImage.naturalWidth * 0.15;
                         const itemHeight = itemImage.height * (itemWidth / itemImage.width);
@@ -417,3 +478,4 @@
     </script>
 </body>
 </html>
+
